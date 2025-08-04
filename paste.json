@@ -95,7 +95,7 @@
         },
         "MemorySize": 1024,
         "Timeout": 60,
-        "ReservedConcurrentExecutions": 10
+        "ReservedConcurrentExecutions": 11
       }
     },
     "SubscriberEventInvokeConfig": {
