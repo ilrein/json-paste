@@ -1,0 +1,145 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Process issues for SST Console",
+  "Parameters": {
+    "workspaceID": {
+      "Type": "String",
+      "Description": "This is the ID of your SST Console workspace, do not edit."
+    },
+    "template": {
+      "Type": "String",
+      "Description": "The template URL"
+    }
+  },
+  "Resources": {
+    "SubscriberRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "sst-console-issue-${workspaceID}-${AWS::Region}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            },
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "logs.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "Permissions",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:*",
+                    "cloudformation:DescribeStacks",
+                    "ssm:GetParameter",
+                    "s3:ListBucket",
+                    "s3:GetObject"
+                  ],
+                  "Resource": [
+                    "*"
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ]
+      }
+    },
+    "Subscriber": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "sst-console-issue-${workspaceID}"
+        },
+        "Code": {
+          "S3Bucket": {
+            "Fn::Sub": "sst-public-production-${AWS::Region}"
+          },
+          "S3Key": "issue/handler/pxVaSKBYmVDoQ9nNFPl+wUJjepuFiNOqeIH2vkcqIQE=.zip"
+        },
+        "Environment": {
+          "Variables": {
+            "SST_API_URL": "http://api.console.sst.dev",
+            "SST_KEY": "t8HEM5SJkSPFy+LskSdAkGt05ltX3Ic9N+E1d5xKd6Q=",
+            "SST_KEY_FILE": "resource.enc",
+            "SST_RESOURCE_App": "{\"name\":\"console\",\"stage\":\"production\"}"
+          }
+        },
+        "Handler": "bundle.handler",
+        "Runtime": "nodejs22.x",
+        "Role": {
+          "Fn::GetAtt": [
+            "SubscriberRole",
+            "Arn"
+          ]
+        },
+        "MemorySize": 1024,
+        "Timeout": 60,
+        "ReservedConcurrentExecutions": 10
+      }
+    },
+    "SubscriberEventInvokeConfig": {
+      "Type": "AWS::Lambda::EventInvokeConfig",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "Subscriber"
+        },
+        "Qualifier": "$LATEST",
+        "MaximumEventAgeInSeconds": 600,
+        "MaximumRetryAttempts": 0
+      }
+    },
+    "SubscriberLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/sst-console-issue-${workspaceID}"
+        },
+        "RetentionInDays": 1
+      }
+    },
+    "SubscriberPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "Subscriber"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "logs.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "SubscriberARN": {
+      "Value": {
+        "Fn::GetAtt": [
+          "Subscriber",
+          "Arn"
+        ]
+      }
+    }
+  }
+}
